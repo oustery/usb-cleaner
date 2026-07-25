@@ -1,153 +1,227 @@
-# USB Cleaner v1.0
+# 🔌 USB Cleaner v2.0
 
-Программа для очистки истории подключённых USB-устройств и меток безопасности на флешках. Работает в системном трее Windows.
+[![Build Status](https://github.com/super-cow/usb-cleaner/actions/workflows/build.yml/badge.svg)](https://github.com/super-cow/usb-cleaner/actions/workflows/build.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20Linux-blue.svg)](https://github.com/super-cow/usb-cleaner)
 
-## 🎯 Функции
+**Современное приложение для очистки истории USB-устройств и меток безопасности на флешках.**
 
-### 1. Очистка истории USB-устройств
-- Удаляет записи об **отключённых** USB-устройствах из реестра Windows
-- **Сохраняет** информацию о текущих подключениях
-- Очищает ключи:
+Построено на **[Nana C++ GUI](https://github.com/cnjinhao/nana)** — современной, лёгкой библиотеке для создания красивых кроссплатформенных интерфейсов.
+
+---
+
+## ✨ Возможности
+
+### 🔌 Очистка истории USB-устройств
+- ✅ Удаляет записи об **отключённых** устройствах из реестра Windows
+- ✅ **Сохраняет** информацию о текущих подключениях
+- ✅ Очищает ключи:
   - `HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Enum\USBSTOR`
   - `HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Enum\USB`
   - `HKEY_LOCAL_MACHINE\SYSTEM\MountedDevices`
 
-### 2. Очистка меток флешек
-- Удаляет **Zone.Identifier** потоки (альтернативные потоки NTFS)
-- Убирает метки "Эта программа загружена из Интернета"
-- Удаляет метки безопасности на всех файлах на съёмных дисках
-- Работает рекурсивно по всем папкам и подпапкам
+### 💾 Очистка меток флешек (Zone.Identifier)
+- ✅ Удаляет **альтернативные потоки NTFS** (Zone.Identifier)
+- ✅ Убирает метки "Эта программа загружена из Интернета"
+- ✅ Рекурсивная обработка всех папок и подпапок
+- ✅ Поддержка нескольких съёмных дисков одновременно
 
-## 📋 Системные требования
+### 🎨 Современный интерфейс
+- ✅ Красивый GUI на **Nana C++ GUI**
+- ✅ Прогресс-бары в реальном времени
+- ✅ Цветовая индикация статуса операций
+- ✅ Всплывающие подсказки (tooltips)
+- ✅ Адаптивный дизайн
 
-- **ОС**: Windows 7 / 8 / 10 / 11 (64-bit)
-- **Права**: Администратор (обязательно!)
-- **Компилятор**: MinGW-w64 или MSVC
+## 📸 Скриншоты
 
-## 🔧 Сборка проекта
-
-### Вариант 1: MinGW-w64 (рекомендуется)
-
-```bash
-# Простая сборка
-g++ -o usb_cleaner.exe src/main.cpp -lcomctl32 -lshell32 -lole32 -luuid -mwindows -static
-
-# Или через Makefile
-make
+```
+┌─────────────────────────────────────────────┐
+│  🔌 USB Cleaner v2.0                    [_][×]│
+│                                             │
+│  ── 🔌 Очистка истории USB-устройств ──     │
+│  [═════════════════════════════] 100%       │
+│           [ 🧹 Очистить историю USB ]        │
+│                                             │
+│  ── 💾 Очистка меток флешек ──              │
+│  [═════════════════════════════]   0%       │
+│        [ 🗑️ Очистить метки Zone.Identifier ] │
+│                                             │
+│  ✓ Готов к работе                           │
+│                    [ℹ️ О программе] [✖️ Выход] │
+└─────────────────────────────────────────────┘
 ```
 
-### Вариант 2: MSVC (Visual Studio)
+## 🚀 Быстрый старт
 
-```cmd
-cl /EHsc /Fe:usb_cleaner.exe src/main.cpp comctl32.lib shell32.lib ole32.lib uuid.lib /link /SUBSYSTEM:WINDOWS
+### Требования
+- **Windows 7 / 8 / 10 / 11** (64-bit)
+- **Права администратора** (обязательно!)
+- **Компилятор**: MinGW-w64 или MSVC 2019+
+
+### Сборка из исходников
+
+#### 1. Клонирование репозитория
+```bash
+git clone https://github.com/super-cow/usb-cleaner.git
+cd usb-cleaner
+git checkout dev  # Для разработки
 ```
 
-### Вариант 3: CMake
-
+#### 2. Загрузка Nana GUI
 ```bash
+# Windows (PowerShell)
+mkdir external\nana
+cd external\nana
+Invoke-WebRequest -Uri "https://github.com/cnjinhao/nana/releases/download/v1.7.4/nana-1.7.4.zip" -OutFile "nana.zip"
+Expand-Archive -Path "nana.zip" -DestinationPath "."
+```
+
+#### 3. Сборка с CMake
+```bash
+# Создание директории сборки
 mkdir build && cd build
-cmake ..
-cmake --build . --config Release
+
+# Конфигурация (MinGW)
+cmake .. -G "MinGW Makefiles" -DCMAKE_BUILD_TYPE=Release
+
+# Или конфигурация (MSVC)
+cmake .. -G "Visual Studio 17 2022" -A x64
+
+# Сборка
+cmake --build . --config Release --parallel
 ```
 
-## 🚀 Использование
-
-1. **Запустите программу от имени администратора**
-   - Правый клик → "Запуск от имени администратора"
-
-2. **Иконка появится в системном трее** (рядом с часами)
-
-3. **Правый клик по иконке** — откроется меню:
-   - 🔌 **Очистить историю USB-устройств** — удаляет записи об отключённых устройствах
-   - 💾 **Очистить метки флешек** — удаляет Zone.Identifier со всех файлов на флешках
-   - ℹ️ **О программе** — информация о версии
-   - ✖️ **Выход** — закрытие программы
-
-## ⚠️ Важные предупреждения
-
-1. **Обязательно запускайте от администратора!** Программа автоматически запросит повышение прав.
-
-2. **Создаётся резервная копия в логе** `usb_cleaner.log` рядом с программой.
-
-3. **Текущие подключения НЕ затрагиваются** при очистке истории устройств.
-
-4. **Zone.Identifier** — это поток данных NTFS, который Windows добавляет к файлам, скачанным из интернета или скопированных с других компьютеров. Его удаление безопасно.
+#### 4. Быстрая сборка (MinGW)
+```bash
+g++ -std=c++17 -o usb_cleaner.exe src/main.cpp \
+    -I./external/nana/include \
+    -DNANA_AUTOMATIC_GUI_TESTING \
+    -lcomctl32 -lshell32 -lole32 -luuid -lgdi32 \
+    -lcomdlg32 -lsetupapi \
+    -mwindows -static -DNDEBUG -O2
+```
 
 ## 📁 Структура проекта
 
 ```
 usb-cleaner/
 ├── src/
-│   └── main.cpp          # Основной исходный код
-├── CMakeLists.txt        # CMake конфигурация
-├── Makefile              # Makefile для MinGW
-├── README.md             # Документация
-└── usb_cleaner.log       # Лог-файл (создаётся при запуске)
+│   └── main.cpp              # Основной код приложения (~700 строк)
+├── external/
+│   └── nana/                 # Библиотека Nana GUI (загружается отдельно)
+├── .github/
+│   └── workflows/
+│       └── build.yml         # GitHub Actions CI/CD
+├── cmake/
+│   └── version.h.in          # Шаблон версии
+├── CMakeLists.txt            # CMake конфигурация
+├── Makefile                  # Альтернативная сборка (MinGW)
+├── README.md                 # Документация
+├── LICENSE                   # MIT License
+└── .gitignore                # Правила Git
 ```
 
-## 🔍 Как это работает
+## 🔄 Ветки репозитория
 
-### Механизм очистки USB-истории:
+| Ветка | Назначение |
+|-------|------------|
+| `master` | Стабильная версия, готовая к релизу |
+| `dev` | Разработка новых функций |
 
-```
-1. Открываем HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Enum\USBSTOR
-2. Перечисляем все классы устройств (Disk&Ven_..., FlashDrive_...)
-3. Для каждого экземпляра проверяем:
-   - Подключено ли устройство сейчас? (через SetupAPI)
-   - Если НЕТ → удаляем запись из реестра
-4. Также очищаем MountedDevices от записей о несуществующих дисках
-```
+## 🔄 GitHub Actions (CI/CD)
 
-### Механизм очистки меток:
+Проект включает автоматизированные сборки:
 
-```
-1. Находим все съёмные диски (A: - Z:)
-2. Для каждого диска рекурсивно ищем файлы
-3. Для каждого файла проверяем наличие :Zone.Identifier потока
-4. Если найден → удаляем его
-5. Обновляем кэш проводника
-```
+### Автоматически при push:
+- ✅ **Windows MinGW-w64** — сборка с GCC
+- ✅ **Windows MSVC** — сборка с Visual Studio 2022
+- ✅ **Linux** — проверка компиляции (опционально)
 
-## 🛠️ Кастомизация
+### При создании тега (`v*`):
+- ✅ **Создание релиза** на GitHub
+- ✅ **Публикация артефактов** (.zip файлы)
+- ✅ **Генерация changelog** из коммитов
 
-### Изменение иконки трея
+### Пример создания релиза:
+```bash
+# Создание тега релиза
+git tag v2.0.0
+git push origin v2.0.0
 
-Замените `IDI_WINLOGO` на свой ресурс:
-
-```cpp
-// В функции CreateTrayIcon():
-g_nid.hIcon = LoadIcon(g_hInstance, MAKEINTRESOURCE(IDI_MYICON));
+# Или beta-версия
+git tag v2.0.0-beta.1
+git push origin v2.0.0-beta.1
 ```
 
-### Добавление автозапуска
+## 🛠️ Использование
 
-Добавьте в `WinMain()` после создания окна:
+1. **Запустите программу от имени администратора**
+   - Правый клик → "Запуск от имени администратора"
 
-```cpp
-// Добавление в автозапуск
-HKEY hKey;
-RegOpenKeyExW(HKEY_CURRENT_USER, 
-    L"Software\\Microsoft\\Windows\\CurrentVersion\\Run", 
-    0, KEY_SET_VALUE, &hKey);
-RegSetValueExW(hKey, L"USBCleaner", 0, REG_SZ, 
-    (BYTE*)L"C:\\Path\\To\\usb_cleaner.exe", 52);
-RegCloseKey(hKey);
+2. **Выберите действие:**
+   - 🧹 **Очистить историю USB** — удаляет записи об отключённых устройствах
+   - 🗑️ **Очистить метки флешек** — удаляет Zone.Identifier со всех файлов
+
+3. **Следите за прогрессом** в реальном времени
+
+4. **Просмотрите результаты** во всплывающем диалоге
+
+## ⚙️ Технические детали
+
+### Архитектура
+```
+┌─────────────────────────────────────┐
+│          Nana C++ GUI Layer         │
+│  (Формы, кнопки, прогресс-бары)     │
+├─────────────────────────────────────┤
+│         Business Logic Layer        │
+│  (CleanUSBHistory, CleanFlashLabels)│
+├─────────────────────────────────────┤
+│        Windows API Layer            │
+│  (Registry, SetupAPI, NTFS ADS)     │
+└─────────────────────────────────────┘
 ```
 
-## 📄 Лицензия
-
-MIT License - свободное использование и модификация.
+### Ключевые технологии
+- **Nana C++ GUI** — современный UI фреймворк
+- **Windows Registry API** — работа с реестром
+- **SetupAPI** — обнаружение USB устройств
+- **NTFS Alternate Data Streams** — Zone.Identifier
 
 ## 🐛 Troubleshooting
 
 | Проблема | Решение |
 |----------|---------|
-| "Не удалось открыть реестр" | Запустите от имени администратора |
-| Иконка исчезла | Перезапустите Explorer или программу |
-| Не очищаются метки | Проверьте формат файловой системы (только NTFS) |
+| "Требуются права администратора" | Запустите от имени администратора |
+| Ошибка компиляции Nana | Проверьте путь `external/nana/include` |
+| Не очищаются метки | Файловая система должна быть NTFS |
+| Программа не запускается | Установите Visual C++ Redistributable |
+
+## 🤝 Вклад в развитие
+
+1. Fork проекта
+2. Создайте ветку функции (`git checkout -b feature/amazing-feature`)
+3. Commit изменения (`git commit -m 'Add amazing feature'`)
+4. Push в ветку (`git push origin feature/amazing-feature`)
+5. Откройте Pull Request в `dev` ветку
+
+## 📄 Лицензия
+
+Этот проект лицензирован под **MIT License** — см. файл [LICENSE](LICENSE).
+
+## 👥 Авторы
+
+- **super-cow** — Initial work and ongoing maintenance
+
+## 🙏 Благодарности
+
+- [Nana C++ GUI](https://github.com/cnjinhao/nana) — за отличную библиотеку
+- [Microsoft](https://docs.microsoft.com) — за документацию WinAPI
+- Сообществу Stack Overflow — за помощь с решениями
 
 ---
 
-**Версия**: 1.0  
-**Дата**: 2026  
-**Совместимость**: Windows 7+
+**Версия**: 2.0  
+**Статус**: ✅ Active Development  
+**Последнее обновление**: 2026

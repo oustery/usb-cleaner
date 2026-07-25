@@ -1,0 +1,75 @@
+# Build directories
+build/
+cmake-build-*/
+*.build/
+
+# Compiled outputs
+*.exe
+*.dll
+*.so
+*.dylib
+*.out
+*.app
+
+# Object files
+*.o
+*.obj
+
+# IDE files
+.vs/
+.vscode/
+*.sln
+*.vcxproj*
+*.user
+*.filters
+.idea/
+*.swp
+*.swo
+*~
+
+# CMake generated files
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+Makefile
+install_manifest.txt
+CTestTestfile.cmake
+_deps/
+
+# External dependencies (downloaded during build)
+external/nana/include/
+external/nana/lib/
+external/nana/bin/
+
+# Logs and debug files
+*.log
+usb_cleaner.log
+debug.log
+DUMPBIN.*
+
+# OS files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Archives for release
+*.zip
+*.tar.gz
+*.7z
+
+# Test coverage
+coverage/
+htmlcov/
+.coverage
+*.gcda
+*.gcno
+
+# Package files
+*.deb
+*.rpm
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+*.bak

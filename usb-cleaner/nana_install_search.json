@@ -1,0 +1,47 @@
+[
+  {
+    "url": "https://github.com/cnjinhao/nana",
+    "name": "cnjinhao/nana: a modern C++ GUI library",
+    "snippet": "Nana is a C++ standard-like GUI library designed to allow developers to easily create cross-platform GUI applications with modern C++ style. Read more",
+    "host_name": "github.com",
+    "rank": 0,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://www.reddit.com/r/cpp/comments/babfl5/a_pretty_big_list_of_c_gui_libraries",
+    "name": "A pretty big list of C++ GUI libraries : r/cpp",
+    "snippet": "A list of 35 \"healthy\" C++ UI libraries. I also ended up unearthing a bunch of old, dead UI libraries. It is quite entertaining to go back memory lane. Read more\nImGui (for prototypes and debug UIs) and Qt (for full-fledged GU applications) are pretty much the only GUI libraries that matter in C++, IMHO. A curated list of awesome header-only C++ libraries : r/cpp Any Header-Only GUI libraries that handle window creation ... More results from www.reddit.com",
+    "host_name": "www.reddit.com",
+    "rank": 1,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://qpcr4vir.github.io/nana-doxy/html/d5/d9b/md__c_1__prog__ext_lib_nana-docs_source_01-_introduction.html",
+    "name": "What is Nana C++ Library?",
+    "snippet": "The Nana C++ Library is an alternative, a pure C++ library that will guide you in doing GUI with all your C++ knowledge/skill/idioms. Read more",
+    "host_name": "qpcr4vir.github.io",
+    "rank": 2,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://www.youtube.com/watch?v=M2OCMZs_Hls",
+    "name": "Getting started with the Nana C++ GUI library",
+    "snippet": "Getting started with the Nana C++ GUI library @TeamDman25 likes1.9K views2 years ago … problem and tooling demo\nhttps://github.com/cnjinhao/nana https://web.archive.org/web/20231220215730/http://nanapro.org/en-us/",
+    "host_name": "www.youtube.com",
+    "rank": 3,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://sourceforge.net/projects/nanapro",
+    "name": "Nana C++ Library download",
+    "snippet": "Download Nana C++ Library for free . A modern C++ GUI library. it provides a GUI framework and threads for easy programming with modern C++ methods,\nFree Download Nana C++ Library for free. A modern C++ GUI library. it provides a GUI framework and threads for easy programming with modern C++ methods, for ...",
+    "host_name": "sourceforge.net",
+    "rank": 4,
+    "date": "",
+    "favicon": ""
+  }
+]

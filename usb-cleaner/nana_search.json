@@ -1,0 +1,74 @@
+[
+  {
+    "url": "https://github.com/cnjinhao/nana",
+    "name": "cnjinhao/nana: a modern C++ GUI library",
+    "snippet": "Nana is a C++ standard-like GUI library designed to allow developers to easily create cross-platform GUI applications with modern C++ style.",
+    "host_name": "github.com",
+    "rank": 0,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://qpcr4vir.github.io/nana-doxy/html/d5/d9b/md__c_1__prog__ext_lib_nana-docs_source_01-_introduction.html",
+    "name": "What is Nana C++ Library?",
+    "snippet": "The Nana C++ Library is an alternative, a pure C++ library that will guide you in doing GUI with all your C++ knowledge/skill/idioms.",
+    "host_name": "qpcr4vir.github.io",
+    "rank": 1,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://www.reddit.com/r/cpp/comments/1871fzm/what_are_your_goto_c_gui_libraries_in_2023",
+    "name": "What are your GO-TO C++ GUI libraries in 2023 ! (Obscure",
+    "snippet": "GMPI UI My lightweight drawing library which simply uses the underlying OS (but tweaked for consistent results across Windows and macOS).",
+    "host_name": "www.reddit.com",
+    "rank": 2,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://www.simplifycpp.org/?id=a0266",
+    "name": "Best Libraries for Creating GUI in C++ on Major Operating",
+    "snippet": "Jan 11, 2026 — FLTK is an extremely lightweight and open-source library used to create GUIs in C++. It's especially suited for applications that demand speed ...",
+    "host_name": "www.simplifycpp.org",
+    "rank": 3,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://cpp.libhunt.com/nana-alternatives",
+    "name": "nana Alternatives - C++ GUI | LibHunt",
+    "snippet": "Jun 19, 2024 — Nana is a C++ standard-like GUI library designed to allow developers to easily create cross-platform GUI applications with modern C++ style.",
+    "host_name": "cpp.libhunt.com",
+    "rank": 4,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://sourceforge.net/projects/nanapro",
+    "name": "Nana C++ Library download",
+    "snippet": "Nana C++ Library takes aim at easy-to-use and portable library, it provides a GUI framework and threads for easy programming with modern C++ methods.",
+    "host_name": "sourceforge.net",
+    "rank": 5,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://stackoverflow.com/questions/1283202/lightweight-c-gui-library",
+    "name": "Lightweight C++ Gui Library [closed]",
+    "snippet": "Closed. This question is seeking recommendations for software libraries, tutorials, tools, books, or other off-site resources. It does not meet Stack ...",
+    "host_name": "stackoverflow.com",
+    "rank": 6,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://www.youtube.com/watch?v=M2OCMZs_Hls",
+    "name": "Getting started with the Nana C++ GUI library",
+    "snippet": "Getting started with the Nana C++ GUI library 1.9K views2 years ago. From Basics to Advanced",
+    "host_name": "www.youtube.com",
+    "rank": 7,
+    "date": "",
+    "favicon": ""
+  }
+]
