@@ -1,0 +1,859 @@
+     1→/*
+     2→ * USB Cleaner v2.0 - Modern GUI Application with Nana
+     3→ * Очистка истории USB-устройств и меток флешек
+     4→ * 
+     5→ * Библиотека: Nana C++ GUI (https://github.com/cnjinhao/nana)
+     6→ * 
+     7→ * Сборка:
+     8→ * 1. Скачайте Nana: https://github.com/cnjinhao/nana/releases
+     9→ * 2. Распакуйте в папку /nana рядом с проектом
+    10→ * 3. Скомпилируйте:
+    11→ *    g++ -std=c++17 -o usb_cleaner.exe src/main.cpp 
+    12→ *        -I./nana/include -DNANA_AUTOMATIC_GUI_TESTING
+    13→ *        -lcomctl32 -lshell32 -lole32 -luuid -lgdi32 -lcomdlg32
+    14→ *        -mwindows -static -DNDEBUG
+    15→ */
+    16→
+    17→#define NANA_AUTOMATIC_GUI_TESTING
+    18→#include <nana/gui.hpp>
+    19→#include <nana/gui/widgets/form.hpp>
+    20→#include <nana/gui/widgets/button.hpp>
+    21→#include <nana/gui/widgets/label.hpp>
+    22→#include <nana/gui/widgets/progress.hpp>
+    23→#include <nana/gui/widgets/textbox.hpp>
+    24→#include <nana/gui/widgets/group.hpp>
+    25→#include <nana/gui/widgets/picture.hpp>
+    26→#include <nana/gui/widgets/listbox.hpp>
+    27→#include <nana/gui/timer.hpp>
+    28→#include <nana/gui/tooltip.hpp>
+    29→#include <nana/gui/filebox.hpp>
+    30→
+    31→// Windows API для системных функций
+    32→#ifndef WIN32_LEAN_AND_MEAN
+    33→#define WIN32_LEAN_AND_MEAN
+    34→#endif
+    35→#include <windows.h>
+    36→#include <shellapi.h>
+    37→#include <shlobj.h>
+    38→#include <setupapi.h>
+    39→#include <devguid.h>
+    40→#include <regstr.h>
+    41→
+    42→// Стандартные библиотеки
+    43→#include <string>
+    44→#include <vector>
+    45→#include <set>
+    46→#include <fstream>
+    47→#include <thread>
+    48→#include <mutex>
+    49→#include <atomic>
+    50→#include <memory>
+    51→#include <chrono>
+    52→#include <functional>
+    53→
+    54→#pragma comment(lib, "comctl32.lib")
+    55→#pragma comment(lib, "shell32.lib")
+    56→#pragma comment(lib, "ole32.lib")
+    57→#pragma comment(lib, "uuid.lib")
+    58→#pragma comment(lib, "gdi32.lib")
+    59→
+    60→using namespace nana;
+    61→
+    62→// ==================== КОНСТАНТЫ ====================
+    63→
+    64→const wchar_t* USB_STOR_KEY = L"SYSTEM\\CurrentControlSet\\Enum\\USBSTOR";
+    65→const wchar_t* USB_KEY = L"SYSTEM\\CurrentControlSet\\Enum\\USB";
+    66→const wchar_t* MOUNTED_DEVICES_KEY = L"SYSTEM\\MountedDevices";
+    67→const char* APP_NAME = "USB Cleaner";
+    68→const char* APP_VERSION = "v2.0";
+    69→
+    70→// ==================== СТРУКТУРЫ ====================
+    71→
+    72→struct USBDeviceInfo {
+    73→    std::wstring deviceName;
+    74→    std::wstring devicePath;
+    75→    bool isConnected;
+    76→};
+    77→
+    78→struct OperationResult {
+    79→    bool success;
+    80→    int itemsProcessed;
+    81→    std::string message;
+    82→    std::vector<std::wstring> details;
+    83→};
+    84→
+    85→// ==================== ЛОГГЕР ====================
+    86→
+    87→class Logger {
+    88→private:
+    89→    std::mutex mtx;
+    90→    std::wofstream logFile;
+    91→    
+    92→public:
+    93→    Logger() {
+    94→        logFile.open("usb_cleaner.log", std::ios::app);
+    95→    }
+    96→    
+    97→    ~Logger() {
+    98→        if (logFile.is_open()) logFile.close();
+    99→    }
+   100→    
+   101→    void log(const std::wstring& message) {
+   102→        std::lock_guard<std::mutex> lock(mtx);
+   103→        if (logFile.is_open()) {
+   104→            SYSTEMTIME st;
+   105→            GetLocalTime(&st);
+   106→            logFile << L"[" << st.wYear << L"-" << std::setw(2) << std::setfill(L'0') << st.wMonth 
+   107→                    << L"-" << std::setw(2) << std::setfill(L'0') << st.wDay << L" " 
+   108→                    << std::setw(2) << std::setfill(L'0') << st.wHour << L":" 
+   109→                    << std::setw(2) << std::setfill(L'0') << st.wMinute << L":" 
+   110→                    << std::setw(2) << std::setfill(L'0') << st.wSecond << L"] " 
+   111→                    << message << std::endl;
+   112→            logFile.flush();
+   113→        }
+   114→    }
+   115→};
+   116→
+   117→static Logger logger;
+   118→
+   119→// ==================== ПРОВЕРКА АДМИНИСТРАТОРА ====================
+   120→
+   121→bool IsAdministrator() {
+   122→    BOOL isAdmin = FALSE;
+   123→    PSID adminSid = NULL;
+   124→    SID_IDENTIFIER_AUTHORITY ntAuthority = SECURITY_NTAuthority;
+   125→    
+   126→    if (AllocateAndInitializeSid(&ntAuthority, 2, SECURITY_BUILTIN_DOMAIN_RID, 
+   127→        DOMAIN_ALIAS_RID_ADMINS, 0, 0, 0, 0, 0, 0, &adminSid)) {
+   128→        if (!CheckTokenMembership(NULL, adminSid, &isAdmin)) {
+   129→            isAdmin = FALSE;
+   130→        }
+   131→        FreeSid(adminSid);
+   132→    }
+   133→    
+   134→    return isAdmin == TRUE;
+   135→}
+   136→
+   137→void RestartAsAdmin() {
+   138→    wchar_t exePath[MAX_PATH];
+   139→    GetModuleFileNameW(NULL, exePath, MAX_PATH);
+   140→    
+   141→    SHELLEXECUTEINFOW sei = { sizeof(sei) };
+   142→    sei.lpVerb = L"runas";
+   143→    sei.lpFile = exePath;
+   144→    sei.nShow = SW_SHOWNORMAL;
+   145→    
+   146→    ShellExecuteExW(&sei);
+   147→}
+   148→
+   149→// ==================== ФУНКЦИИ РАБОТЫ С USB ====================
+   150→
+   151→std::set<std::wstring> GetCurrentUSBDrives() {
+   152→    std::set<std::wstring> drives;
+   153→    DWORD drivesMask = GetLogicalDrives();
+   154→    
+   155→    for (char drive = 'A'; drive <= 'Z'; drive++) {
+   156→        if (drivesMask & (1 << (drive - 'A'))) {
+   157→            std::wstring path = std::wstring(1, drive) + L":\\";
+   158→            UINT type = GetDriveType(path.c_str());
+   159→            
+   160→            if (type == DRIVE_REMOVABLE || type == DRIVE_FIXED) {
+   161→                drives.insert(std::wstring(1, drive) + L":");
+   162→            }
+   163→        }
+   164→    }
+   165→    
+   166→    return drives;
+   167→}
+   168→
+   169→bool IsUSBDeviceConnected(const std::wstring& hardwareId) {
+   170→    HDEVINFO hDevInfo = SetupDiGetClassDevs(NULL, L"USB", NULL, DIGCF_PRESENT | DIGCF_ALLCLASSES);
+   171→    if (hDevInfo == INVALID_HANDLE_VALUE) return false;
+   172→    
+   173→    bool found = false;
+   174→    SP_DEVINFO_DATA devInfo = {};
+   175→    devInfo.cbSize = sizeof(SP_DEVINFO_DATA);
+   176→    
+   177→    for (DWORD i = 0; SetupDiEnumDeviceInfo(hDevInfo, i, &devInfo); i++) {
+   178→        wchar_t deviceId[MAX_DEVICE_ID_LEN];
+   179→        if (SetupDiGetDeviceRegistryPropertyW(hDevInfo, &devInfo, SPDRP_HARDWAREID,
+   180→            NULL, (PBYTE)deviceId, sizeof(deviceId), NULL)) {
+   181→            
+   182→            std::wstring idStr(deviceId);
+   183→            if (idStr.find(hardwareId) != std::wstring::npos) {
+   184→                found = true;
+   185→                break;
+   186→            }
+   187→        }
+   188→    }
+   189→    
+   190→    SetupDiDestroyDeviceInfoList(hDevInfo);
+   191→    return found;
+   192→}
+   193→
+   194→bool DeleteRegistryKeyRecursive(HKEY hRootKey, const std::wstring& subKey) {
+   195→    HKEY hKey;
+   196→    LONG result = RegOpenKeyExW(hRootKey, subKey.c_str(), 0, KEY_READ | KEY_WRITE | KEY_WOW64_64KEY, &hKey);
+   197→    
+   198→    if (result != ERROR_SUCCESS) return false;
+   199→    
+   200→    DWORD subKeysCount = 0, maxSubKeyLen = 0;
+   201→    RegQueryInfoKeyW(hKey, NULL, NULL, NULL, &subKeysCount, &maxSubKeyLen, NULL,
+   202→        NULL, NULL, NULL, NULL, NULL);
+   203→    
+   204→    if (subKeysCount > 0 && maxSubKeyLen > 0) {
+   205→        std::vector<wchar_t> subKeyName(maxSubKeyLen + 1);
+   206→        
+   207→        for (DWORD i = subKeysCount; i > 0; i--) {
+   208→            DWORD nameSize = maxSubKeyLen + 1;
+   209→            FILETIME lastWriteTime;
+   210→            
+   211→            if (RegEnumKeyExW(hKey, i - 1, subKeyName.data(), &nameSize,
+   212→                NULL, NULL, NULL, &lastWriteTime) == ERROR_SUCCESS) {
+   213→                
+   214→                std::wstring childPath = subKey + L"\\" + subKeyName.data();
+   215→                DeleteRegistryKeyRecursive(hRootKey, childPath);
+   216→            }
+   217→        }
+   218→    }
+   219→    
+   220→    RegCloseKey(hKey);
+   221→    
+   222→    result = RegDeleteKeyExW(hRootKey, subKey.c_str(), KEY_WOW64_64KEY, 0);
+   223→    return (result == ERROR_SUCCESS || result == ERROR_FILE_NOT_FOUND);
+   224→}
+   225→
+   226→OperationResult CleanUSBHistory(std::function<void(int)> progressCallback) {
+   227→    OperationResult result{true, 0, "", {}};
+   228→    
+   229→    logger.log(L"Начало очистки истории USB-устройств...");
+   230→    
+   231→    HKEY hUsbStorKey;
+   232→    LONG openResult = RegOpenKeyExW(HKEY_LOCAL_MACHINE, USB_STOR_KEY, 0, 
+   233→        KEY_READ | KEY_WRITE | KEY_WOW64_64KEY, &hUsbStorKey);
+   234→    
+   235→    if (openResult != ERROR_SUCCESS) {
+   236→        result.success = false;
+   237→        result.message = "Ошибка открытия реестра USBSTOR";
+   238→        return result;
+   239→    }
+   240→    
+   241→    // Получаем список устройств
+   242→    DWORD subKeysCount = 0, maxSubKeyLen = 0;
+   243→    RegQueryInfoKeyW(hUsbStorKey, NULL, NULL, NULL, &subKeysCount,
+   244→        &maxSubKeyLen, NULL, NULL, NULL, NULL, NULL, NULL);
+   245→    
+   246→    int processed = 0;
+   247→    
+   248→    if (subKeysCount > 0 && maxSubKeyLen > 0) {
+   249→        std::vector<wchar_t> deviceClassName(maxSubKeyLen + 1);
+   250→        
+   251→        for (DWORD i = 0; i < subKeysCount; i++) {
+   252→            DWORD nameSize = maxSubKeyLen + 1;
+   253→            FILETIME lastWriteTime;
+   254→            
+   255→            if (RegEnumKeyExW(hUsbStorKey, i, deviceClassName.data(), &nameSize,
+   256→                NULL, NULL, NULL, &lastWriteTime) == ERROR_SUCCESS) {
+   257→                
+   258→                std::wstring classPath = std::wstring(USB_STOR_KEY) + L"\\" + deviceClassName.data();
+   259→                
+   260→                HKEY hClassKey;
+   261→                if (RegOpenKeyExW(HKEY_LOCAL_MACHINE, classPath.c_str(), 0,
+   262→                    KEY_READ | KEY_WRITE | KEY_WOW64_64KEY, &hClassKey) == ERROR_SUCCESS) {
+   263→                    
+   264→                    DWORD instanceCount = 0, maxInstanceLen = 0;
+   265→                    RegQueryInfoKeyW(hClassKey, NULL, NULL, NULL, &instanceCount,
+   266→                        &maxInstanceLen, NULL, NULL, NULL, NULL, NULL, NULL);
+   267→                    
+   268→                    if (instanceCount > 0 && maxInstanceLen > 0) {
+   269→                        std::vector<wchar_t> instanceName(maxInstanceLen + 1);
+   270→                        
+   271→                        for (DWORD j = 0; j < instanceCount; j++) {
+   272→                            DWORD instNameSize = maxInstanceLen + 1;
+   273→                            
+   274→                            if (RegEnumKeyExW(hClassKey, j, instanceName.data(), &instNameSize,
+   275→                                NULL, NULL, NULL, &lastWriteTime) == ERROR_SUCCESS) {
+   276→                                
+   277→                                std::wstring fullDeviceId = deviceClassName.data();
+   278→                                fullDeviceId += L"&";
+   279→                                fullDeviceId += instanceName.data();
+   280→                                
+   281→                                if (!IsUSBDeviceConnected(fullDeviceId)) {
+   282→                                    std::wstring instancePath = classPath + L"\\" + instanceName.data();
+   283→                                    
+   284→                                    logger.log(L"Удаление: " + fullDeviceId);
+   285→                                    
+   286→                                    if (DeleteRegistryKeyRecursive(HKEY_LOCAL_MACHINE, instancePath)) {
+   287→                                        result.itemsProcessed++;
+   288→                                        result.details.push_back(L"Удалено: " + fullDeviceId);
+   289→                                    } else {
+   290→                                        result.details.push_back(L"Ошибка удаления: " + fullDeviceId);
+   291→                                    }
+   292→                                } else {
+   293→                                    result.details.push_back(L"Пропущено (подключено): " + fullDeviceId);
+   294→                                }
+   295→                                
+   296→                                processed++;
+   297→                                if (progressCallback) {
+   298→                                    progressCallback((processed * 100) / (int)(subKeysCount * 2));
+   299→                                }
+   300→                            }
+   301→                        }
+   302→                    }
+   303→                    
+   304→                    RegCloseKey(hClassKey);
+   305→                }
+   306→                
+   307→                if (progressCallback) {
+   308→                    progressCallback((processed * 100) / (int)(subKeysCount * 2));
+   309→                }
+   310→            }
+   311→        }
+   312→    }
+   313→    
+   314→    RegCloseKey(hUsbStorKey);
+   315→    
+   316→    // Очищаем MountedDevices
+   317→    HKEY hMountedKey;
+   318→    if (RegOpenKeyExW(HKEY_LOCAL_MACHINE, MOUNTED_DEVICES_KEY, 0,
+   319→        KEY_READ | KEY_WRITE | KEY_WOW64_64KEY, &hMountedKey) == ERROR_SUCCESS) {
+   320→        
+   321→        DWORD valuesCount = 0, maxValueNameLen = 0;
+   322→        RegQueryInfoKeyW(hMountedKey, NULL, NULL, NULL, NULL, NULL, NULL,
+   323→            &valuesCount, &maxValueNameLen, NULL, NULL, NULL);
+   324→        
+   325→        if (valuesCount > 0 && maxValueNameLen > 0) {
+   326→            std::vector<wchar_t> valueName(maxValueNameLen + 1);
+   327→            
+   328→            for (DWORD i = 0; i < valuesCount; i++) {
+   329→                DWORD valueNameSize = maxValueNameLen + 1;
+   330→                
+   331→                if (RegEnumValueW(hMountedKey, i, valueName.data(), &valueNameSize,
+   332→                    NULL, NULL, NULL, NULL) == ERROR_SUCCESS) {
+   333→                    
+   334→                    std::wstring valName(valueName.data());
+   335→                    
+   336→                    if (valName.find(L"\\DosDevices\\") != std::wstring::npos ||
+   337→                        valName.find(L"\\??\\") != std::wstring::npos) {
+   338→                        
+   339→                        std::wstring driveLetter;
+   340→                        size_t pos = valName.find(L"\\DosDevices\\");
+   341→                        if (pos != std::wstring::npos) {
+   342→                            driveLetter = valName.substr(pos + 12);
+   343→                        } else {
+   344→                            pos = valName.find(L"\\??\\");
+   345→                            if (pos != std::wstring::npos) {
+   346→                                driveLetter = valName.substr(pos + 4);
+   347→                            }
+   348→                        }
+   349→                        
+   350→                        if (!driveLetter.empty()) {
+   351→                            UINT type = GetDriveType(driveLetter.c_str());
+   352→                            if (type == DRIVE_NO_ROOT_DIR || type == DRIVE_UNKNOWN) {
+   353→                                RegDeleteValueW(hMountedKey, valName.c_str());
+   354→                                result.itemsProcessed++;
+   355→                                processed++;
+   356→                            }
+   357→                        }
+   358→                    }
+   359→                }
+   360→                
+   361→                if (progressCallback) {
+   362→                    progressCallback((processed * 100) / (int)(subKeysCount * 2));
+   363→                }
+   364→            }
+   365→        }
+   366→        
+   367→        RegCloseKey(hMountedKey);
+   368→    }
+   369→    
+   370→    result.message = "Очистка завершена успешно";
+   371→    logger.log(L"Завершено. Удалено: " + std::to_wstring(result.itemsProcessed));
+   372→    
+   373→    return result;
+   374→}
+   375→
+   376→int RemoveZoneIdentifiers(const std::wstring& rootPath, std::function<void(int)> progressCallback, int totalFiles) {
+   377→    static int processed = 0;
+   378→    int removedCount = 0;
+   379→    
+   380→    WIN32_FIND_DATAW findData;
+   381→    std::wstring searchPattern = rootPath + L"*.*";
+   382→    
+   383→    HANDLE hFind = FindFirstFileW(searchPattern.c_str(), &findData);
+   384→    if (hFind == INVALID_HANDLE_VALUE) return 0;
+   385→    
+   386→    do {
+   387→        if (wcscmp(findData.cFileName, L".") == 0 || wcscmp(findData.cFileName, L"..") == 0)
+   388→            continue;
+   389→        
+   390→        std::wstring fullPath = rootPath + findData.cFileName;
+   391→        
+   392→        if (findData.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) {
+   393→            fullPath += L"\\";
+   394→            removedCount += RemoveZoneIdentifiers(fullPath, progressCallback, totalFiles);
+   395→        } else {
+   396→            std::wstring zoneFile = fullPath + L":Zone.Identifier";
+   397→            DWORD attrs = GetFileAttributesW(zoneFile.c_str());
+   398→            
+   399→            if (attrs != INVALID_FILE_ATTRIBUTES) {
+   400→                SetFileAttributesW(zoneFile.c_str(), FILE_ATTRIBUTE_NORMAL);
+   401→                
+   402→                if (DeleteFileW(zoneFile.c_str())) {
+   403→                    removedCount++;
+   404→                    logger.log(L"Удален Zone.Identifier: " + fullPath);
+   405→                }
+   406→            }
+   407→            
+   408→            processed++;
+   409→            if (progressCallback && totalFiles > 0) {
+   410→                progressCallback((processed * 100) / totalFiles);
+   411→            }
+   412→        }
+   413→        
+   414→    } while (FindNextFileW(hFind, &findData));
+   415→    
+   416→    FindClose(hFind);
+   417→    return removedCount;
+   418→}
+   419→
+   420→OperationResult CleanFlashLabels(std::function<void(int)> progressCallback) {
+   421→    OperationResult result{true, 0, "", {}};
+   422→    
+   423→    logger.log(L"Начало очистки меток флешек...");
+   424→    
+   425→    int totalRemoved = 0;
+   426→    std::set<std::wstring> processedDrives;
+   427→    
+   428→    DWORD drivesMask = GetLogicalDrives();
+   429→    int driveCount = 0;
+   430→    
+   431→    // Сначала считаем диски
+   432→    for (char drive = 'A'; drive <= 'Z'; drive++) {
+   433→        if (drivesMask & (1 << (drive - 'A'))) {
+   434→            std::wstring drivePath = std::wstring(1, drive) + L":\\";
+   435→            UINT type = GetDriveType(drivePath.c_str());
+   436→            if (type == DRIVE_REMOVABLE || type == DRIVE_FIXED) {
+   437→                driveCount++;
+   438→            }
+   439→        }
+   440→    }
+   441→    
+   442→    int currentDrive = 0;
+   443→    
+   444→    for (char drive = 'A'; drive <= 'Z'; drive++) {
+   445→        if (!(drivesMask & (1 << (drive - 'A')))) continue;
+   446→        
+   447→        std::wstring drivePath = std::wstring(1, drive) + L":\\";
+   448→        UINT type = GetDriveType(drivePath.c_str());
+   449→        
+   450→        if (type == DRIVE_REMOVABLE || type == DRIVE_FIXED) {
+   451→            currentDrive++;
+   452→            
+   453→            wchar_t fileSystem[MAX_PATH];
+   454→            if (GetVolumeInformationW(drivePath.c_str(), NULL, 0, NULL, NULL, NULL, 
+   455→                fileSystem, MAX_PATH)) {
+   456→                
+   457→                std::wstring driveLetter(1, drive);
+   458→                driveLetter += L":";
+   459→                
+   460→                if (processedDrives.find(driveLetter) == processedDrives.end()) {
+   461→                    processedDrives.insert(driveLetter);
+   462→                    
+   463→                    logger.log(L"Обработка диска: " + driveLetter);
+   464→                    
+   465→                    int removed = RemoveZoneIdentifiers(drivePath, 
+   466→                        [&, currentDrive](int p) {
+   467→                            if (progressCallback) {
+   468→                                progressCallback(((currentDrive - 1) * 100 + p) / driveCount);
+   469→                            }
+   470→                        }, 0);
+   471→                    
+   472→                    totalRemoved += removed;
+   473→                    result.details.push_back(L"Диск " + driveLetter + L": удалено " + 
+   474→                        std::to_wstring(removed) + L" меток");
+   475→                }
+   476→            }
+   477→            
+   478→            if (progressCallback) {
+   479→                progressCallback((currentDrive * 100) / driveCount);
+   480→            }
+   481→        }
+   482→    }
+   483→    
+   484→    SHChangeNotify(SHCNE_UPDATEDIR, SHCNF_PATH, NULL, NULL);
+   485→    
+   486→    result.itemsProcessed = totalRemoved;
+   487→    result.message = "Очистка меток завершена успешно";
+   488→    logger.log(L"Завершено. Удалено меток: " + std::to_wstring(totalRemoved));
+   489→    
+   490→    return result;
+   491→}
+   492→
+   493→// ==================== ГЛАВНОЕ ОКНО ПРИЛОЖЕНИЯ ====================
+   494→
+   495→class USBCleanerApp {
+   496→private:
+   497→    form fm;
+   498→    group grp_usb, grp_flash;
+   499→    btn_clean_usb, btn_clean_flash, btn_exit, btn_about;
+   500→    progress prog_usb, prog_flash;
+   501→    lbl_status, lbl_title, lbl_version;
+   502→    textbox txt_log;
+   503→    listbox lst_devices;
+   504→    tooltip tip;
+   505→    timer tmr_animation;
+   506→    
+   507→    color bg_color = color(240, 245, 250);
+   508→    color accent_color = color(41, 128, 185);
+   509→    color success_color = color(39, 174, 96);
+   510→    color warning_color = color(243, 156, 18);
+   511→    color text_color = color(44, 62, 80);
+   512→    
+   513→public:
+   514→    USBCleanerApp() : fm(API::make_center(520, 580), API::window_caption("USB Cleaner")),
+   515→        grp_usb(fm, rectangle(20, 80, 480, 180)),
+   516→        grp_flash(fm, rectangle(20, 280, 480, 180)),
+   517→        btn_clean_usb(grp_usb, rectangle(150, 120, 180, 40)),
+   518→        btn_clean_flash(grp_flash, rectangle(150, 120, 180, 40)),
+   519→        btn_exit(fm, rectangle(380, 500, 110, 35)),
+   520→        btn_about(fm, rectangle(30, 500, 110, 35)),
+   521→        prog_usb(grp_usb, rectangle(30, 90, 420, 25)),
+   522→        prog_flash(grp_flash, rectangle(30, 90, 420, 25)),
+   523→        lbl_status(fm, rectangle(20, 475, 480, 25)),
+   524→        lbl_title(fm, rectangle(20, 15, 480, 50)),
+   525→        lbl_version(fm, rectangle(400, 55, 100, 20)),
+   526→        txt_log(fm, rectangle(20, 470, 480, 25)),
+   527→        lst_devices(grp_usb, rectangle(30, 30, 420, 50)),
+   528→        tip(fm),
+   529→        tmr_animation(fm, std::chrono::milliseconds(100))
+   530→    {
+   531→        InitializeUI();
+   532→        BindEvents();
+   533→    }
+   534→    
+   535→    void InitializeUI() {
+   536→        // Настройка главного окна
+   537→        fm.bgcolor(bg_color);
+   538→        fm.caption("🔌 USB Cleaner " + std::string(APP_VERSION));
+   539→        
+   540→        // Заголовок
+   541→        lbl_title.fgcolor(accent_color);
+   542→        lbl_title.textalign(align::center);
+   543→        lbl_title.typeface(font("", 18, {700}));
+   544→        lbl_title.caption("USB Cleaner - Управление устройствами");
+   545→        
+   546→        // Версия
+   547→        lbl_version.fgcolor(color(127, 140, 141));
+   548→        lbl_version.typeface(font("", 9));
+   549→        lbl_version.caption(APP_VERSION);
+   550→        
+   551→        // Группа USB
+   552→        grp_usb.caption("🔌 Очистка истории USB-устройств");
+   553→        grp_usb.fgcolor(text_color);
+   554→        grp_usb.typeface(font("", 11, {600}));
+   555→        
+   556→        btn_clean_usb.caption("🧹 Очистить историю USB");
+   557→        btn_clean_usb.bgcolor(accent_color);
+   558→        btn_clean_usb.fgcolor(colors::white);
+   559→        btn_clean_usb.typeface(font("", 11, {600}));
+   560→        btn_clean_usb.enable(true);
+   561→        tip.show(btn_clean_usb, "Удаляет записи об отключённых устройствах из реестра");
+   562→        
+   563→        prog_usb.amount(100);
+   564→        prog_usb.value(0);
+   565→        prog_usb.bgcolor(color(220, 225, 230));
+   566→        prog_usb.fgcolor(accent_color);
+   567→        
+   568→        // Группа Flash
+   569→        grp_flash.caption("💾 Очистка меток флешек");
+   570→        grp_flash.fgcolor(text_color);
+   571→        grp_flash.typeface(font("", 11, {600}));
+   572→        
+   573→        btn_clean_flash.caption("🗑️ Очистить метки Zone.Identifier");
+   574→        btn_clean_flash.bgcolor(success_color);
+   575→        btn_clean_flash.fgcolor(colors::white);
+   576→        btn_clean_flash.typeface(font("", 11, {600}));
+   577→        btn_clean_flash.enable(true);
+   578→        tip.show(btn_clean_flash, "Удаляет метки безопасности NTFS на флешках");
+   579→        
+   580→        prog_flash.amount(100);
+   581→        prog_flash.value(0);
+   582→        prog_flash.bgcolor(color(220, 225, 230));
+   583→        prog_flash.fgcolor(success_color);
+   584→        
+   585→        // Статус
+   586→        lbl_status.fgcolor(text_color);
+   587→        lbl_status.typeface(font("", 10));
+   588→        lbl_status.caption("✓ Готов к работе");
+   589→        
+   590→        // Кнопки управления
+   591→        btn_exit.caption("✖️ Выход");
+   592→        btn_exit.bgcolor(color(231, 76, 60));
+   593→        btn_exit.fgcolor(colors::white);
+   594→        btn_exit.typeface(font("", 10));
+   595→        
+   596→        btn_about.caption("ℹ️ О программе");
+   597→        btn_about.bgcolor(color(149, 165, 166));
+   598→        btn_about.fgcolor(colors::white);
+   599→        btn_about.typeface(font("", 10));
+   600→        
+   601→        // Показываем окно
+   602→        fm.show();
+   603→        fm.modality();
+   604→    }
+   605→    
+   606→    void BindEvents() {
+   607→        // Кнопка очистки USB
+   608→        btn_clean_usb.events.click([this]() {
+   609→            msgbox mb(fm, "Подтверждение", msgbox::yes_no);
+   610→            mb.icon(msgbox::icon_question);
+   611→            mb.message("Вы уверены, что хотите очистить историю USB-устройств?\n\n"
+   612→                      "Будут удалены записи об ОТКЛЮЧЁННЫХ устройствах.\n"
+   613→                      "Текущие подключения сохранятся.");
+   614→            
+   615→            if (mb() == pick_ok) {
+   616→                RunUSBCleanup();
+   617→            }
+   618→        });
+   619→        
+   620→        // Кнопка очистки меток
+   621→        btn_clean_flash.events.click([this]() {
+   622→            msgbox mb(fm, "Подтверждение", msgbox::yes_no);
+   623→            mb.icon(msgbox::icon_question);
+   624→            mb.message("Вы уверены, что хотите очистить метки на флешках?\n\n"
+   625→                      "Будут удалены:\n"
+   626→                      "- Zone.Identifier потоки\n"
+   627→                      "- Метки безопасности файлов\n"
+   628→                      "- Другие альтернативные потоки NTFS");
+   629→            
+   630→            if (mb() == pick_ok) {
+   631→                RunFlashCleanup();
+   632→            }
+   633→        });
+   634→        
+   635→        // Кнопка выхода
+   636→        btn_exit.events.click([this]() {
+   637→            API::close_window(fm);
+   638→        });
+   639→        
+   640→        // Кнопка "О программе"
+   641→        btn_about.events.click([this]() {
+   642→            ShowAboutDialog();
+   643→        });
+   644→        
+   645→        // Закрытие окна
+   646→        fm.events.destroy([this]() {
+   647→            API::exit();
+   648→        });
+   649→    }
+   650→    
+   651→    void RunUSBCleanup() {
+   652→        btn_clean_usb.enable(false);
+   653→        btn_clean_flash.enable(false);
+   654→        prog_usb.value(0);
+   655→        lbl_status.caption("⏳ Выполняется очистка истории USB...");
+   656→        lbl_status.fgcolor(warning_color);
+   657→        
+   658→        // Запуск в отдельном потоке
+   659→        std::thread([this]() {
+   660→            auto result = CleanUSBHistory([this](int progress) {
+   661→                fm.ui_thread([this, progress]() {
+   662→                    prog_usb.value(progress);
+   663→                });
+   664→            });
+   665→            
+   666→            fm.ui_thread([this, result]() {
+   667→                prog_usb.value(100);
+   668→                btn_clean_usb.enable(true);
+   669→                btn_clean_flash.enable(true);
+   670→                
+   671→                if (result.success) {
+   672→                    lbl_status.caption("✓ Успешно! Удалено записей: " + 
+   673→                        std::to_string(result.itemsProcessed));
+   674→                    lbl_status.fgcolor(success_color);
+   675→                    
+   676→                    msgbox m(fm, "Результат", msgbox::ok);
+   677→                    m.icon(msgbox::icon_information);
+   678→                    m.message("Очистка истории USB завершена!\n\n"
+   679→                             "Удалено записей: " + std::to_string(result.itemsProcessed) +
+   680→                             "\n\nДетали сохранены в логе.");
+   681→                    m();
+   682→                } else {
+   683→                    lbl_status.caption("✗ Ошибка: " + result.message);
+   684→                    lbl_status.fgcolor(color(231, 76, 60));
+   685→                }
+   686→            });
+   687→        }).detach();
+   688→    }
+   689→    
+   690→    void RunFlashCleanup() {
+   691→        btn_clean_usb.enable(false);
+   692→        btn_clean_flash.enable(false);
+   693→        prog_flash.value(0);
+   694→        lbl_status.caption("⏳ Выполняется очистка меток...");
+   695→        lbl_status.fgcolor(warning_color);
+   696→        
+   697→        std::thread([this]() {
+   698→            auto result = CleanFlashLabels([this](int progress) {
+   699→                fm.ui_thread([this, progress]() {
+   700→                    prog_flash.value(progress);
+   701→                });
+   702→            });
+   703→            
+   704→            fm.ui_thread([this, result]() {
+   705→                prog_flash.value(100);
+   706→                btn_clean_usb.enable(true);
+   707→                btn_clean_flash.enable(true);
+   708→                
+   709→                if (result.success) {
+   710→                    lbl_status.caption("✓ Успешно! Удалено меток: " + 
+   711→                        std::to_string(result.itemsProcessed));
+   712→                    lbl_status.fgcolor(success_color);
+   713→                    
+   714→                    msgbox m(fm, "Результат", msgbox::ok);
+   715→                    m.icon(msgbox::icon_information);
+   716→                    m.message("Очистка меток завершена!\n\n"
+   717→                             "Удалено меток: " + std::to_string(result.itemsProcessed) +
+   718→                             "\n\nРекомендуется перезагрузить проводник.");
+   719→                    m();
+   720→                } else {
+   721→                    lbl_status.caption("✗ Ошибка: " + result.message);
+   722→                    lbl_status.fgcolor(color(231, 76, 60));
+   723→                }
+   724→            });
+   725→        }).detach();
+   726→    }
+   727→    
+   728→    void ShowAboutDialog() {
+   729→        form about_fm(API::make_center(400, 350), API::window_caption("О программе"));
+   730→        about_fm.bgcolor(bg_color);
+   731→        
+   732→        label title(about_fm, rectangle(10, 20, 380, 40));
+   733→        title.fgcolor(accent_color);
+   734→        title.textalign(align::center);
+   735→        title.typeface(font("", 20, {700}));
+   736→        title.caption("USB Cleaner");
+   737→        
+   738→        label version(about_fm, rectangle(10, 65, 380, 25));
+   739→        version.fgcolor(color(127, 140, 141));
+   740→        version.textalign(align::center);
+   741→        version.caption(std::string("Версия ") + APP_VERSION);
+   742→        
+   743→        label desc(about_fm, rectangle(20, 100, 360, 150));
+   744→        desc.fgcolor(text_color);
+   745→        desc.textalign(align::left);
+   746→        desc.typeface(font("", 10));
+   747→        desc.caption(
+   748→            "Программа для очистки истории подключённых\n"
+   749→            "USB-устройств и меток безопасности на флешках.\n\n"
+   750→            "Функции:\n"
+   751→            "• Очистка реестра от записей об отключённых USB\n"
+   752→            "• Удаление Zone.Identifier потоков NTFS\n"
+   753→            "• Сохранение данных о текущих подключениях\n\n"
+   754→            "Библиотека: Nana C++ GUI\n"
+   755→            "Совместимость: Windows 7+"
+   756→        );
+   757→        
+   758→        label copyright(about_fm, rectangle(10, 270, 380, 25));
+   759→        copyright.fgcolor(color(127, 140, 141));
+   760→        copyright.textalign(align::center);
+   761→        copyright.caption("(c) 2026 USB Cleaner - MIT License");
+   762→        
+   763→        button btn_ok(about_fm, rectangle(140, 305, 120, 35));
+   764→        btn_ok.caption("OK");
+   765→        btn_ok.bgcolor(accent_color);
+   766→        btn_ok.fgcolor(colors::white);
+   767→        
+   768→        btn_ok.events.click([&about_fm]() {
+   769→            API::close_window(about_fm);
+   770→        });
+   771→        
+   772→        about_fm.modality();
+   773→    }
+   774→    
+   775→    void Run() {
+   776→        exec();
+   777→    }
+   778→};
+   779→
+   780→// ==================== SYSTRAY ИНТЕГРАЦИЯ (опционально) ====================
+   781→
+   782→class SystemTrayIcon {
+   783→private:
+   784→    NOTIFYICONDATA nid = {};
+   785→    HWND hWnd = NULL;
+   786→    
+   787→public:
+   788→    bool Create(HWND parentWnd, const wchar_t* tooltip, HICON icon) {
+   789→        hWnd = parentWnd;
+   790→        
+   791→        nid.cbSize = sizeof(NOTIFYICONDATA);
+   792→        nid.hWnd = hWnd;
+   793→        nid.uID = 1;
+   794→        nid.uFlags = NIF_ICON | NIF_MESSAGE | NIF_TIP;
+   795→        nid.uCallbackMessage = WM_APP + 1;
+   796→        nid.hIcon = icon ? icon : LoadIcon(NULL, IDI_WINLOGO);
+   797→        wcscpy_s(nid.szTip, tooltip);
+   798→        
+   799→        return Shell_NotifyIcon(NIM_ADD, &nid) != FALSE;
+   800→    }
+   801→    
+   802→    void Remove() {
+   803→        Shell_NotifyIcon(NIM_DELETE, &nid);
+   804→    }
+   805→    
+   806→    void ShowBalloon(const wchar_t* title, const wchar_t* text, int timeout = 3000) {
+   807→        wcscpy_s(nid.szInfoTitle, title);
+   808→        wcscpy_s(nid.szInfo, text);
+   809→        nid.uTimeout = timeout;
+   810→        nid.uFlags |= NIF_INFO;
+   811→        nid.dwInfoFlags = NIIF_INFO;
+   812→        Shell_NotifyIcon(NIM_MODIFY, &nid);
+   813→    }
+   814→    
+   815→    void SetTooltip(const wchar_t* tooltip) {
+   816→        wcscpy_s(nid.szTip, tooltip);
+   817→        Shell_NotifyIcon(NIM_MODIFY, &nid);
+   818→    }
+   819→};
+   820→
+   821→// ==================== TOCHKA ВХОДА ====================
+   822→
+   823→int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nCmdShow) {
+   824→    // Инициализация Nana
+   825→    constexpr int ARGV = 0;
+   826→    char* argv[] = {nullptr};
+   827→    
+   828→    // Проверка прав администратора
+   829→    if (!IsAdministrator()) {
+   830→        // Показываем диалог с запросом прав
+   831→        int choice = MessageBoxW(NULL, 
+   832→            L"Программа требует прав администратора для работы с реестром.\n\n"
+   833→            L"Хотите перезапустить с правами администратора?",
+   834→            L"USB Cleaner - Требуются права",
+   835→            MB_YESNO | MB_ICONQUESTION | MB_DEFBUTTON1);
+   836→        
+   837→        if (choice == IDYES) {
+   838→            RestartAsAdmin();
+   839→        }
+   840→        return 0;
+   841→    }
+   842→    
+   843→    logger.log(L"Программа запущена (режим администратора)");
+   844→    
+   845→    try {
+   846→        // Создаём и запускаем приложение
+   847→        USBCleanerApp app;
+   848→        app.Run();
+   849→    } catch (const std::exception& e) {
+   850→        logger.log(L"Критическая ошибка: " + std::wstring(e.what(), e.what() + strlen(e.what())));
+   851→        MessageBoxA(NULL, e.what(), "Critical Error", MB_ICONERROR);
+   852→        return 1;
+   853→    }
+   854→    
+   855→    logger.log(L"Программа закрыта");
+   856→    
+   857→    return 0;
+   858→}
+   859→
